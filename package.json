@@ -1,11 +1,11 @@
 {
-  "name": "markmap-vscode",
-  "version": "0.2.12",
+  "name": "markmap-vscode-fork",
+  "version": "0.3.0",
   "description": "Visualize your markdown in VSCode",
   "author": "Gerald <gera2ld@live.com>",
   "license": "MIT",
-  "displayName": "Markmap",
-  "publisher": "gera2ld",
+  "displayName": "Markmap (Fork)",
+  "publisher": "Ava051213",
   "icon": "assets/favicon.png",
   "engines": {
     "vscode": "^1.75.0"
@@ -22,7 +22,7 @@
   "contributes": {
     "commands": [
       {
-        "command": "markmap-vscode.open",
+        "command": "markmap-fork.open",
         "category": "Markmap",
         "title": "Open as markmap",
         "icon": {
@@ -31,19 +31,19 @@
         }
       },
       {
-        "command": "markmap-vscode.toggle",
+        "command": "markmap-fork.toggle",
         "category": "Markmap",
         "title": "Toggle the active node"
       },
       {
-        "command": "markmap-vscode.toggle-recursively",
+        "command": "markmap-fork.toggle-recursively",
         "category": "Markmap",
         "title": "Toggle the active node recursively"
       }
     ],
     "customEditors": [
       {
-        "viewType": "markmap-vscode.markmap",
+        "viewType": "markmap-fork.markmap",
         "displayName": "Markmap",
         "selector": [
           {
@@ -57,28 +57,28 @@
       "commandPalette": [
         {
           "when": "editorLangId == markdown || editorLangId == mdx",
-          "command": "markmap-vscode.open"
+          "command": "markmap-fork.open"
         },
         {
           "when": "editorLangId == markdown || editorLangId == mdx",
-          "command": "markmap-vscode.toggle"
+          "command": "markmap-fork.toggle"
         },
         {
           "when": "editorLangId == markdown || editorLangId == mdx",
-          "command": "markmap-vscode.toggle-recursively"
+          "command": "markmap-fork.toggle-recursively"
         }
       ],
       "explorer/context": [
         {
           "when": "resourceLangId == markdown || resourceLangId == mdx",
-          "command": "markmap-vscode.open",
+          "command": "markmap-fork.open",
           "group": "navigation"
         }
       ],
       "editor/title": [
         {
           "when": "activeEditor == workbench.editors.files.textFileEditor && (resourceLangId == markdown || resourceLangId == mdx)",
-          "command": "markmap-vscode.open",
+          "command": "markmap-fork.open",
           "group": "navigation"
         }
       ]
@@ -102,17 +102,17 @@
     },
     "keybindings": [
       {
-        "command": "markmap-vscode.open",
+        "command": "markmap-fork.open",
         "key": "ctrl+alt+m",
         "when": "editorLangId == markdown || editorLangId == mdx"
       },
       {
-        "command": "markmap-vscode.toggle",
+        "command": "markmap-fork.toggle",
         "key": "ctrl+alt+.",
         "when": "editorLangId == markdown || editorLangId == mdx"
       },
       {
-        "command": "markmap-vscode.toggle-recursively",
+        "command": "markmap-fork.toggle-recursively",
         "key": "ctrl+alt+/",
         "when": "editorLangId == markdown || editorLangId == mdx"
       }
@@ -133,7 +133,10 @@
     "lint:fix": "eslint --fix && prettier --write src",
     "dev:pack": "npx @vscode/vsce pack"
   },
-  "repository": "https://github.com/gera2ld/markmap-vscode",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Ava051213/markmap-vscode.git"
+  },
   "main": "dist/extension.js",
   "browser": "dist/extension.js",
   "files": [
