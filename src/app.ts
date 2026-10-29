@@ -25,6 +25,8 @@ const foldMemory = new Map<string, number>();
 const TYPING_WINDOW = 1000;
 let lastDataAt = 0;
 let userZoomed = false;
+let lastFocusPath = '';
+let followEnabled = true;
 let active:
   | {
       node: INode;
@@ -50,6 +52,7 @@ const handlers = {
     const now = performance.now();
     const typing = lastDataAt > 0 && now - lastDataAt < TYPING_WINDOW;
     lastDataAt = now;
+    const prevFolds = root ? captureFolds(root) : null;
     await mm.setData((root = data.root), {
       ...defaultOptions,
       ...deriveOptions(data.jsonOptions),
@@ -59,7 +62,7 @@ const handlers = {
     const scale = Number(data.jsonOptions?.minFitScale);
     minFitScale =
       Number.isFinite(scale) && scale > 0 ? scale : DEFAULT_MIN_FIT_SCALE;
-    if (root && foldMemory.size && reapplyFolds(root)) {
+    if (root && prevFolds && restoreFolds(root, prevFolds)) {
       await mm.renderData();
     }
     if (firstTime) {
@@ -74,7 +77,12 @@ const handlers = {
     collapseOthers?: boolean;
   }) {
     await loading?.promise;
-    const result = root && findActiveNode(options);
+    const result =
+      root &&
+      findActiveNode({
+        ...options,
+        enabled: followEnabled,
+      });
     if (!result) return;
     const { node, needRerender } = result;
     if (needRerender) {
@@ -130,6 +138,30 @@ document.addEventListener('click', (e) => {
 vscode.postMessage({ type: 'refresh' });
 
 const toolbar = new Toolbar();
+const followBtn = createButton('跟随:开');
+toolbar.register({
+  id: 'followCursor',
+  title: 'Toggle cursor follow',
+  content: followBtn,
+  onClick: () => {
+    followEnabled = !followEnabled;
+    followBtn.textContent = followEnabled ? '跟随:开' : '跟随:关';
+    lastFocusPath = '';
+    vscode.postMessage({ type: 'refresh' });
+  },
+});
+toolbar.register({
+  id: 'expandAll',
+  title: 'Expand all',
+  content: createButton('全开'),
+  onClick: () => setAllFolds(0),
+});
+toolbar.register({
+  id: 'collapseAll',
+  title: 'Collapse all',
+  content: createButton('全收'),
+  onClick: () => setAllFolds(1),
+});
 toolbar.register({
   id: 'editAsText',
   title: 'Edit as text',
@@ -147,6 +179,9 @@ toolbar.setItems([
   'zoomOut',
   'fit',
   'recurse',
+  'followCursor',
+  'expandAll',
+  'collapseAll',
   'editAsText',
   'export',
 ]);
@@ -214,22 +249,6 @@ function recordUserFold(treeNode?: INode, recursive?: boolean) {
   }
 }
 
-function reapplyFolds(treeNode: INode) {
-  let changed = false;
-  walkTree(treeNode, (node, next) => {
-    const path = node.state?.path as string | undefined;
-    if (path && foldMemory.has(path) && node.children?.length) {
-      const fold = foldMemory.get(path) || 0;
-      if ((node.payload?.fold ? 1 : 0) !== fold) {
-        node.payload = { ...node.payload, fold };
-        changed = true;
-      }
-    }
-    next();
-  });
-  return changed;
-}
-
 function checkTheme() {
   // https://code.visualstudio.com/api/extension-guides/webview#theming-webview-content
   const isDark = ['vscode-dark', 'vscode-high-contrast'].some((cls) =>
@@ -270,10 +289,12 @@ function findActiveNode({
   line,
   autoExpand = true,
   collapseOthers = false,
+  enabled = true,
 }: {
   line: number;
   autoExpand?: boolean;
   collapseOthers?: boolean;
+  enabled?: boolean;
 }) {
   function dfs(node: INode, ancestors: INode[] = []) {
     const [start, end] =
@@ -290,32 +311,78 @@ function findActiveNode({
   let best: INode | undefined;
   let bestAncestors: INode[] = [];
   dfs(root);
-  let needRerender = false;
   if (!best) return;
-  const path = [...bestAncestors, best];
-  if (autoExpand || collapseOthers) {
-    bestAncestors.forEach((node) => {
-      if (node.payload?.fold) {
-        node.payload.fold = 0;
-        needRerender = true;
-      }
-    });
-  }
-  if (collapseOthers && path.length > 1) {
-    path.forEach((node, index) => {
-      const next = path[index + 1];
-      node.children?.forEach((child) => {
-        if (child === next) return;
-        if (!child.children?.length) return;
-        if (child.payload?.fold) return;
-        const childPath = child.state?.path as string | undefined;
-        if (childPath && foldMemory.get(childPath) === 0) return;
-        child.payload.fold = 1;
-        needRerender = true;
+  const focusPath = String(best.state?.path ?? '');
+  let needRerender = false;
+  if (enabled && focusPath !== lastFocusPath) {
+    const autoExpandNow = enabled && autoExpand;
+    const collapseNow = enabled && collapseOthers;
+    const path = [...bestAncestors, best];
+    if (autoExpandNow || collapseNow) {
+      bestAncestors.forEach((node) => {
+        if (node.payload?.fold) {
+          node.payload.fold = 0;
+          needRerender = true;
+        }
       });
-    });
+    }
+    if (collapseNow && path.length > 1) {
+      path.forEach((node, index) => {
+        const next = path[index + 1];
+        node.children?.forEach((child) => {
+          if (child === next) return;
+          if (!child.children?.length) return;
+          if (child.payload?.fold) return;
+          const childPath = child.state?.path as string | undefined;
+          if (childPath && foldMemory.get(childPath) === 0) return;
+          child.payload.fold = 1;
+          needRerender = true;
+        });
+      });
+    }
+    lastFocusPath = focusPath;
   }
   return { node: best, needRerender };
+}
+
+function captureFolds(treeNode: INode) {
+  const map = new Map<string, number>();
+  walkTree(treeNode, (node, next) => {
+    const path = node.state?.path as string | undefined;
+    if (path && node.children?.length) {
+      map.set(path, node.payload?.fold ? 1 : 0);
+    }
+    next();
+  });
+  return map;
+}
+
+function restoreFolds(treeNode: INode, map: Map<string, number>) {
+  let changed = false;
+  walkTree(treeNode, (node, next) => {
+    const path = node.state?.path as string | undefined;
+    if (path && map.has(path) && node.children?.length) {
+      const fold = map.get(path) || 0;
+      if ((node.payload?.fold ? 1 : 0) !== fold) {
+        node.payload = { ...node.payload, fold };
+        changed = true;
+      }
+    }
+    next();
+  });
+  return changed;
+}
+
+async function setAllFolds(fold: number) {
+  if (!root) return;
+  walkTree(root, (node, next) => {
+    if (node !== root && node.children?.length) {
+      node.payload = { ...node.payload, fold };
+    }
+    next();
+  });
+  await mm.renderData();
+  if (!userZoomed) await mm.fit();
 }
 
 async function highlightNode(node?: INode) {
