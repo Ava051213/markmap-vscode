@@ -24,6 +24,7 @@ let style: HTMLStyleElement;
 const foldMemory = new Map<string, number>();
 const TYPING_WINDOW = 1000;
 let lastDataAt = 0;
+let userZoomed = false;
 let active:
   | {
       node: INode;
@@ -78,11 +79,13 @@ const handlers = {
     const { node, needRerender } = result;
     if (needRerender) {
       await mm.renderData();
-      await mm.fit();
-      const zoom = (mm.svg.node() as any)?.__zoom;
-      if (zoom && zoom.k < minFitScale) {
-        await mm.rescale(minFitScale);
-        await mm.centerNode(node);
+      if (!userZoomed) {
+        await mm.fit();
+        const zoom = (mm.svg.node() as any)?.__zoom;
+        if (zoom && zoom.k < minFitScale) {
+          await mm.rescale(minFitScale);
+          await mm.centerNode(node);
+        }
       }
     }
     highlightNode(node);
@@ -183,19 +186,32 @@ function initialize(mm: Markmap) {
   });
   mm.toggleNode = wrapFunction(mm.toggleNode, async (fn, ...args) => {
     await fn.call(mm, ...args);
-    recordFolds(root);
+    recordUserFold(args[0] as INode, args[1] as boolean | undefined);
+  });
+  mm.fit = wrapFunction(mm.fit, async (fn, ...args) => {
+    await fn.call(mm, ...args);
+    userZoomed = false;
+  });
+  mm.svg.on('zoom.user', (event: { sourceEvent?: Event }) => {
+    if (event?.sourceEvent) userZoomed = true;
   });
 }
 
-function recordFolds(treeNode?: INode) {
+function recordUserFold(treeNode?: INode, recursive?: boolean) {
   if (!treeNode) return;
-  walkTree(treeNode, (node, next) => {
+  const record = (node: INode) => {
     const path = node.state?.path as string | undefined;
     if (path && node.children?.length) {
       foldMemory.set(path, node.payload?.fold ? 1 : 0);
     }
-    next();
-  });
+  };
+  record(treeNode);
+  if (recursive) {
+    walkTree(treeNode, (node, next) => {
+      record(node);
+      next();
+    });
+  }
 }
 
 function reapplyFolds(treeNode: INode) {
@@ -292,6 +308,8 @@ function findActiveNode({
         if (child === next) return;
         if (!child.children?.length) return;
         if (child.payload?.fold) return;
+        const childPath = child.state?.path as string | undefined;
+        if (childPath && foldMemory.get(childPath) === 0) return;
         child.payload.fold = 1;
         needRerender = true;
       });
