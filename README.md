@@ -1,7 +1,6 @@
 # markmap-vscode
 
-> 个人改造版，基于 [markmap/markmap-vscode](https://github.com/markmap/markmap-vscode)（MIT，作者 Gerald）。
-> 与官方版本无关联，也不发布到扩展商店。
+> [markmap/markmap-vscode](https://github.com/markmap/markmap-vscode)
 
 [![vscode](https://img.shields.io/visual-studio-marketplace/v/gera2ld.markmap-vscode)](https://marketplace.visualstudio.com/items?itemName=gera2ld.markmap-vscode)
 [![open vsx](https://img.shields.io/open-vsx/v/gera2ld/markmap-vscode)](https://open-vsx.org/extension/gera2ld/markmap-vscode)
