@@ -1,5 +1,8 @@
 # markmap-vscode
 
+> 个人改造版，基于 [markmap/markmap-vscode](https://github.com/markmap/markmap-vscode)（MIT，作者 Gerald）。
+> 与官方版本无关联，也不发布到扩展商店。
+
 [![vscode](https://img.shields.io/visual-studio-marketplace/v/gera2ld.markmap-vscode)](https://marketplace.visualstudio.com/items?itemName=gera2ld.markmap-vscode)
 [![open vsx](https://img.shields.io/open-vsx/v/gera2ld/markmap-vscode)](https://open-vsx.org/extension/gera2ld/markmap-vscode)
 
@@ -38,3 +41,11 @@ Extra CSS to customize the style of markmap.
 ### Default Options
 
 Default options for Markmap, see <https://markmap.js.org/docs/json-options#markmap-for-vscode> for more details.
+
+## Local additions in this fork
+
+Two extra behaviors, both driven by `markmap.defaultOptions`:
+
+- `"autoExpand": true` — expand the ancestor path of the node under the cursor (upstream feature).
+- `"collapseOthers": true` — additionally fold every branch that is not on the cursor path, so the map only shows where you are editing. Values are read on every cursor move and every edit; `initialExpandLevel` still applies first.
+- `"minFitScale": 0.6` — when the map is re-fitted after folding, never zoom out below this scale, so text stays readable on branches with large content.

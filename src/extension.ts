@@ -148,20 +148,24 @@ class MarkmapEditor implements CustomTextEditorProvider {
     const updateCursor = () => {
       const editor = vscodeWindow.activeTextEditor;
       if (editor?.document === document) {
+        cursorLine = editor.selection.active.line;
         webviewPanel.webview.postMessage({
           type: 'setCursor',
           data: {
-            line: editor.selection.active.line,
+            line: cursorLine,
             autoExpand: globalOptions?.autoExpand,
+            collapseOthers: globalOptions?.collapseOthers,
           },
         });
       }
     };
     let globalOptions: IMarkmapJSONOptions & {
       autoExpand?: boolean;
+      collapseOthers?: boolean;
       htmlParser?: unknown;
     };
     let customCSS: string;
+    let cursorLine = 0;
     let pendingSvgUri: Uri | undefined;
     const updateOptions = () => {
       const raw = workspace

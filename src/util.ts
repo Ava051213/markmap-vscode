@@ -27,9 +27,14 @@ const local = 'local';
 
 export const transformerExport = new Transformer();
 let bestProvider = transformerExport.urlBuilder.provider;
-transformerExport.urlBuilder.getFastestProvider().then((provider) => {
-  bestProvider = provider;
-});
+transformerExport.urlBuilder
+  .getFastestProvider()
+  .then((provider) => {
+    bestProvider = provider;
+  })
+  .catch(() => {
+    // keep the default provider when the network is unavailable
+  });
 
 export function setExportMode(offline: boolean) {
   if (offline) {

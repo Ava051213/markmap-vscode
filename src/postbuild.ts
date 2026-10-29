@@ -1,5 +1,5 @@
-import { createWriteStream } from 'node:fs';
-import { mkdir, stat } from 'node:fs/promises';
+import { createWriteStream, rmSync, statSync } from 'node:fs';
+import { mkdir } from 'node:fs/promises';
 import { extractAssets } from 'markmap-common';
 import { Transformer } from 'markmap-lib';
 import { baseJsPaths } from 'markmap-render';
@@ -27,33 +27,58 @@ async function fetchAssets(assetsDir: string) {
     ...resources,
     ...extractAssets(toolbarAssets),
   ];
-  const fastest = await transformer.urlBuilder.getFastestProvider();
+  const missing = paths.filter((path) => !isFile(resolve(assetsDir, path)));
+  if (!missing.length) {
+    console.log('[postbuild] all assets present, skip downloading');
+    return;
+  }
+  const providers = Object.keys(transformer.urlBuilder.providers);
+  let failed = 0;
   await Promise.all(
-    paths.map((path) =>
-      downloadAsset(
-        resolve(assetsDir, path),
-        transformer.urlBuilder.getFullUrl(path, fastest),
-      ),
-    ),
+    missing.map(async (path) => {
+      for (const provider of providers) {
+        const ok = await downloadAsset(
+          resolve(assetsDir, path),
+          transformer.urlBuilder.getFullUrl(path, provider),
+        );
+        if (ok) return;
+      }
+      failed += 1;
+    }),
   );
+  if (failed) {
+    console.warn(
+      `[postbuild] ${failed} asset(s) failed to download, the preview may miss some features`,
+    );
+  }
+}
+
+function isFile(fullPath: string) {
+  try {
+    return Boolean(statSync(fullPath).isFile());
+  } catch {
+    return false;
+  }
 }
 
 async function downloadAsset(fullPath: string, url: string) {
-  console.log(`${url} -> ${fullPath}`);
   try {
-    const result = await stat(fullPath);
-    // Skip existing files
-    if (result.isFile()) return;
+    const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
+    if (!res.ok || !res.body) return false;
+    await mkdir(dirname(fullPath), { recursive: true });
+    await pipeline(res.body, createWriteStream(fullPath));
+    const expected = Number(res.headers.get('content-length'));
+    if (expected && statSync(fullPath).size !== expected) {
+      rmSync(fullPath, { force: true });
+      return false;
+    }
+    console.log(`${url} -> ${fullPath}`);
+    return true;
   } catch {
-    // ignore
+    return false;
   }
-  const res = await fetch(url);
-  if (!res.ok || !res.body) throw new Error(`Failed to download: ${url}`);
-  await mkdir(dirname(fullPath), { recursive: true });
-  await pipeline(res.body, createWriteStream(fullPath));
 }
 
 fetchAssets(ASSETS_PREFIX).catch((err) => {
   console.error(err);
-  process.exitCode = 1;
 });

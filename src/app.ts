@@ -10,6 +10,8 @@ import {
 declare let mm: Markmap;
 
 const vscode = acquireVsCodeApi();
+const DEFAULT_MIN_FIT_SCALE = 0.6;
+let minFitScale = DEFAULT_MIN_FIT_SCALE;
 let firstTime = true;
 let root: INode | undefined;
 let style: HTMLStyleElement;
@@ -31,6 +33,7 @@ const handlers = {
       activeNode?: {
         placement?: 'center' | 'visible';
       };
+      minFitScale?: number;
     };
   }) {
     loading = defer();
@@ -39,18 +42,33 @@ const handlers = {
       ...deriveOptions(data.jsonOptions),
     });
     activeNodeOptions.placement = data.jsonOptions?.activeNode?.placement;
+    const scale = Number(data.jsonOptions?.minFitScale);
+    minFitScale =
+      Number.isFinite(scale) && scale > 0 ? scale : DEFAULT_MIN_FIT_SCALE;
     if (firstTime) {
       await mm.fit();
       firstTime = false;
     }
     loading.resolve();
   },
-  async setCursor(options: { line: number; autoExpand?: boolean }) {
+  async setCursor(options: {
+    line: number;
+    autoExpand?: boolean;
+    collapseOthers?: boolean;
+  }) {
     await loading?.promise;
     const result = root && findActiveNode(options);
     if (!result) return;
     const { node, needRerender } = result;
-    if (needRerender) await mm.renderData();
+    if (needRerender) {
+      await mm.renderData();
+      await mm.fit();
+      const zoom = (mm.svg.node() as any)?.__zoom;
+      if (zoom && zoom.k < minFitScale) {
+        await mm.rescale(minFitScale);
+        await mm.centerNode(node);
+      }
+    }
     highlightNode(node);
   },
   setCSS(data: string) {
@@ -119,6 +137,12 @@ checkTheme();
 setTimeout(() => {
   initialize(mm);
   toolbar.attach(mm);
+  Object.assign(toolbar.el.style, {
+    position: 'fixed',
+    right: '20px',
+    bottom: '20px',
+    zIndex: '10',
+  });
   document.body.append(toolbar.el);
 });
 
@@ -182,9 +206,11 @@ function findHeading(id: string) {
 function findActiveNode({
   line,
   autoExpand = true,
+  collapseOthers = false,
 }: {
   line: number;
   autoExpand?: boolean;
+  collapseOthers?: boolean;
 }) {
   function dfs(node: INode, ancestors: INode[] = []) {
     const [start, end] =
@@ -202,7 +228,9 @@ function findActiveNode({
   let bestAncestors: INode[] = [];
   dfs(root);
   let needRerender = false;
-  if (autoExpand) {
+  if (!best) return;
+  const path = [...bestAncestors, best];
+  if (autoExpand || collapseOthers) {
     bestAncestors.forEach((node) => {
       if (node.payload?.fold) {
         node.payload.fold = 0;
@@ -210,7 +238,19 @@ function findActiveNode({
       }
     });
   }
-  return best && { node: best, needRerender };
+  if (collapseOthers && path.length > 1) {
+    path.forEach((node, index) => {
+      const next = path[index + 1];
+      node.children?.forEach((child) => {
+        if (child === next) return;
+        if (!child.children?.length) return;
+        if (child.payload?.fold) return;
+        child.payload.fold = 1;
+        needRerender = true;
+      });
+    });
+  }
+  return { node: best, needRerender };
 }
 
 async function highlightNode(node?: INode) {

@@ -109,7 +109,7 @@
   "scripts": {
     "prepare": "husky",
     "vscode:prepublish": "pnpm build",
-    "clean": "del-cli dist",
+    "clean": "del-cli dist/*.js",
     "build:js": "rollup -c && node dist/postbuild.js",
     "build": "pnpm lint:fix && pnpm clean && pnpm build:js",
     "lint": "eslint && prettier --check src",
