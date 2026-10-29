@@ -22,6 +22,8 @@ let firstTime = true;
 let root: INode | undefined;
 let style: HTMLStyleElement;
 const foldMemory = new Map<string, number>();
+const TYPING_WINDOW = 1000;
+let lastDataAt = 0;
 let active:
   | {
       node: INode;
@@ -44,9 +46,13 @@ const handlers = {
     };
   }) {
     loading = defer();
+    const now = performance.now();
+    const typing = lastDataAt > 0 && now - lastDataAt < TYPING_WINDOW;
+    lastDataAt = now;
     await mm.setData((root = data.root), {
       ...defaultOptions,
       ...deriveOptions(data.jsonOptions),
+      duration: typing ? 0 : defaultOptions.duration,
     });
     activeNodeOptions.placement = data.jsonOptions?.activeNode?.placement;
     const scale = Number(data.jsonOptions?.minFitScale);
