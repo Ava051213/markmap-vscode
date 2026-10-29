@@ -235,9 +235,8 @@ function initialize(mm: Markmap) {
 function recordUserFold(treeNode?: INode, recursive?: boolean) {
   if (!treeNode) return;
   const record = (node: INode) => {
-    const path = node.state?.path as string | undefined;
-    if (path && node.children?.length) {
-      foldMemory.set(path, node.payload?.fold ? 1 : 0);
+    if (node.children?.length) {
+      foldMemory.set(foldKey(node), node.payload?.fold ? 1 : 0);
     }
   };
   record(treeNode);
@@ -312,9 +311,9 @@ function findActiveNode({
   let bestAncestors: INode[] = [];
   dfs(root);
   if (!best) return;
-  const focusPath = String(best.state?.path ?? '');
+  const currentFocus = focusKey(best);
   let needRerender = false;
-  if (enabled && focusPath !== lastFocusPath) {
+  if (enabled && currentFocus !== lastFocusPath) {
     const autoExpandNow = enabled && autoExpand;
     const collapseNow = enabled && collapseOthers;
     const path = [...bestAncestors, best];
@@ -327,30 +326,45 @@ function findActiveNode({
       });
     }
     if (collapseNow && path.length > 1) {
+      let folded = 0;
       path.forEach((node, index) => {
         const next = path[index + 1];
         node.children?.forEach((child) => {
           if (child === next) return;
           if (!child.children?.length) return;
           if (child.payload?.fold) return;
-          const childPath = child.state?.path as string | undefined;
-          if (childPath && foldMemory.get(childPath) === 0) return;
+          if (foldMemory.get(foldKey(child)) === 0) return;
           child.payload.fold = 1;
           needRerender = true;
+          folded += 1;
         });
       });
+      if (folded) logData(`[follow] line ${line}: folded ${folded} sibling(s)`);
     }
-    lastFocusPath = focusPath;
+    lastFocusPath = currentFocus;
   }
   return { node: best, needRerender };
+}
+
+function foldKey(node: INode) {
+  return `${node.state?.depth ?? 0} ${node.content}`;
+}
+
+function focusKey(node: INode) {
+  const [start] =
+    (node.payload?.lines as string)?.split(',').map((s) => +s) || [];
+  return Number.isFinite(start) && start >= 0 ? `L${start}` : foldKey(node);
+}
+
+function logData(text: string) {
+  vscode.postMessage({ type: 'log', data: text });
 }
 
 function captureFolds(treeNode: INode) {
   const map = new Map<string, number>();
   walkTree(treeNode, (node, next) => {
-    const path = node.state?.path as string | undefined;
-    if (path && node.children?.length) {
-      map.set(path, node.payload?.fold ? 1 : 0);
+    if (node.children?.length) {
+      map.set(foldKey(node), node.payload?.fold ? 1 : 0);
     }
     next();
   });
@@ -358,18 +372,21 @@ function captureFolds(treeNode: INode) {
 }
 
 function restoreFolds(treeNode: INode, map: Map<string, number>) {
-  let changed = false;
+  let changed = 0;
   walkTree(treeNode, (node, next) => {
-    const path = node.state?.path as string | undefined;
-    if (path && map.has(path) && node.children?.length) {
-      const fold = map.get(path) || 0;
-      if ((node.payload?.fold ? 1 : 0) !== fold) {
-        node.payload = { ...node.payload, fold };
-        changed = true;
+    if (node.children?.length) {
+      const key = foldKey(node);
+      if (map.has(key)) {
+        const fold = map.get(key) || 0;
+        if ((node.payload?.fold ? 1 : 0) !== fold) {
+          node.payload = { ...node.payload, fold };
+          changed += 1;
+        }
       }
     }
     next();
   });
+  if (changed) logData(`[state] restored ${changed} fold(s) after edit`);
   return changed;
 }
 
