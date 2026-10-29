@@ -1,4 +1,10 @@
-import { IDeferred, defer, wrapFunction, type INode } from 'markmap-common';
+import {
+  IDeferred,
+  defer,
+  walkTree,
+  wrapFunction,
+  type INode,
+} from 'markmap-common';
 import { Toolbar } from 'markmap-toolbar';
 import {
   defaultOptions,
@@ -15,6 +21,7 @@ let minFitScale = DEFAULT_MIN_FIT_SCALE;
 let firstTime = true;
 let root: INode | undefined;
 let style: HTMLStyleElement;
+const foldMemory = new Map<string, number>();
 let active:
   | {
       node: INode;
@@ -45,6 +52,9 @@ const handlers = {
     const scale = Number(data.jsonOptions?.minFitScale);
     minFitScale =
       Number.isFinite(scale) && scale > 0 ? scale : DEFAULT_MIN_FIT_SCALE;
+    if (root && foldMemory.size && reapplyFolds(root)) {
+      await mm.renderData();
+    }
     if (firstTime) {
       await mm.fit();
       firstTime = false;
@@ -165,6 +175,37 @@ function initialize(mm: Markmap) {
         true,
       );
   });
+  mm.toggleNode = wrapFunction(mm.toggleNode, async (fn, ...args) => {
+    await fn.call(mm, ...args);
+    recordFolds(root);
+  });
+}
+
+function recordFolds(treeNode?: INode) {
+  if (!treeNode) return;
+  walkTree(treeNode, (node, next) => {
+    const path = node.state?.path as string | undefined;
+    if (path && node.children?.length) {
+      foldMemory.set(path, node.payload?.fold ? 1 : 0);
+    }
+    next();
+  });
+}
+
+function reapplyFolds(treeNode: INode) {
+  let changed = false;
+  walkTree(treeNode, (node, next) => {
+    const path = node.state?.path as string | undefined;
+    if (path && foldMemory.has(path) && node.children?.length) {
+      const fold = foldMemory.get(path) || 0;
+      if ((node.payload?.fold ? 1 : 0) !== fold) {
+        node.payload = { ...node.payload, fold };
+        changed = true;
+      }
+    }
+    next();
+  });
+  return changed;
 }
 
 function checkTheme() {

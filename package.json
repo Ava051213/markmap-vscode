@@ -99,7 +99,24 @@
           "editPresentation": "multilineText"
         }
       }
-    }
+    },
+    "keybindings": [
+      {
+        "command": "markmap-vscode.open",
+        "key": "ctrl+alt+m",
+        "when": "editorLangId == markdown || editorLangId == mdx"
+      },
+      {
+        "command": "markmap-vscode.toggle",
+        "key": "ctrl+alt+.",
+        "when": "editorLangId == markdown || editorLangId == mdx"
+      },
+      {
+        "command": "markmap-vscode.toggle-recursively",
+        "key": "ctrl+alt+/",
+        "when": "editorLangId == markdown || editorLangId == mdx"
+      }
+    ]
   },
   "capabilities": {
     "untrustedWorkspaces": {
